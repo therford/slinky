@@ -12,7 +12,9 @@ class Slinky {
       resize: true,
       speed: 300,
       theme: 'slinky-theme-default',
-      title: false
+      title: false,
+      back_title: false,
+      home: 'Home'
     }
   }
 
@@ -56,16 +58,8 @@ class Slinky {
     // prepend it to the list
     jQuery('li > ul', menu).prepend(header)
 
-    // create back buttons
-    const back = jQuery('<a>')
-      .prop('href', '#')
-      .addClass('back')
-
-    // prepend them to the headers
-    jQuery('.header', menu).prepend(back)
-
     // do we need to add titles?
-    if (settings.title) {
+    if(settings.title) {
       // loop through each child list
       jQuery('li > ul', menu).each((index, element) => {
         // get the label from the parent link
@@ -73,301 +67,330 @@ class Slinky {
           .parent()
           .find('a')
           .first()
-          .text()
+          .clone()
 
         // if it's not empty, create the title
-        if (label) {
+        if(label) {
           const title = jQuery('<header>')
             .addClass('title')
-            .text(label)
+            .html(label.removeClass('next'))
 
           // append it to the immediate header
-          jQuery('> .header', element).append(title)
+          if(jQuery('> .header a', element).length){
+              jQuery('> .header a', element).append(title)
+          }else {
+              jQuery('>.header', element).append(title)
+          }
         }
       })
     }
 
-    // add click listeners
-    this._addListeners()
+    // create back buttons
+    const back = jQuery('<li>').addClass('back-item')
+    jQuery('li > ul', menu).prepend(back);
 
-    // jump to initial active
-    this._jumpToInitial()
+    if(settings.back_title) {
+      // loop through each child list
+      jQuery('li > ul', menu).each((index, element) => {
+          // get the label from the parent link
+          let back_label = '';
+          if(jQuery(element).parent().parent().is('.slinky-menu > ul')) {
+            back_label = settings.home;
+          } else {
+            back_label = jQuery(element)
+              .parent()
+              .parent()
+              .find('.header')
+              .first()
+              .text()
+          }
+
+          jQuery('> .back-item', element).append($('<a>').prop({'href': '#', 'class': 'back'}).append(back_label))
+      })
   }
 
-  // click listeners
-  _addListeners() {
+  // add click listeners
+  this._addListeners()
+
+  // jump to initial active
+  this._jumpToInitial()
+}
+
+// click listeners
+_addListeners() {
     const { menu, settings } = this
 
-    jQuery('a', menu).on('click', e => {
-      // prevent broken/half transitions
-      if (this._clicked + settings.speed > Date.now()) {
-        return false
+  jQuery('a', menu).on('click', e => {
+    // prevent broken/half transitions
+    if(this._clicked + settings.speed > Date.now()) {
+      return false
+    }
+
+    // cache click time to check on next click
+    this._clicked = Date.now()
+
+    // get the link
+    const link = jQuery(e.currentTarget)
+
+    // prevent default if it's a hash
+    // or a Slinky button
+    if(
+      link.attr('href').indexOf('#') === 0 ||
+      link.hasClass('next') ||
+      link.hasClass('back')
+    ) {
+      e.preventDefault()
+    }
+
+    // time to move
+    if(link.hasClass('next')) {
+      // one step forward
+
+      // remove the current active
+      menu.find('.active').removeClass('active')
+
+      // set the new active
+      link
+        .next()
+        .show()
+        .addClass('active')
+
+      // make the chess move
+      this._move(1)
+
+      // resize the menu if need be
+      if(settings.resize) {
+        this._resize(link.next())
       }
+    } else if(link.hasClass('back')) {
+      // and two steps back
+      // just one step back, actually
 
-      // cache click time to check on next click
-      this._clicked = Date.now()
-
-      // get the link
-      const link = jQuery(e.currentTarget)
-
-      // prevent default if it's a hash
-      // or a Slinky button
-      if (
-        link.attr('href').indexOf('#') === 0 ||
-        link.hasClass('next') ||
-        link.hasClass('back')
-      ) {
-        e.preventDefault()
-      }
-
-      // time to move
-      if (link.hasClass('next')) {
-        // one step forward
-
+      // make the move
+      this._move(-1, () => {
         // remove the current active
         menu.find('.active').removeClass('active')
 
         // set the new active
         link
-          .next()
-          .show()
+          .parent()
+          .parent()
+          .hide()
+          .parentsUntil(menu, 'ul')
+          .first()
           .addClass('active')
+      })
 
-        // make the chess move
-        this._move(1)
-
-        // resize the menu if need be
-        if (settings.resize) {
-          this._resize(link.next())
-        }
-      } else if (link.hasClass('back')) {
-        // and two steps back
-        // just one step back, actually
-
-        // make the move
-        this._move(-1, () => {
-          // remove the current active
-          menu.find('.active').removeClass('active')
-
-          // set the new active
+      // resize the menu if need be
+      if(settings.resize) {
+        this._resize(
           link
-            .parent()
-            .parent()
-            .hide()
-            .parentsUntil(menu, 'ul')
-            .first()
-            .addClass('active')
-        })
-
-        // resize the menu if need be
-        if (settings.resize) {
-          this._resize(
-            link
-              .parent()
-              .parent()
-              .parentsUntil(menu, 'ul')
-          )
-        }
+          .parent()
+          .parent()
+          .parentsUntil(menu, 'ul')
+        )
       }
-    })
-  }
+    }
+  })
+}
 
-  // jump to initial active on init
-  _jumpToInitial() {
+// jump to initial active on init
+_jumpToInitial() {
     const { menu, settings } = this
 
-    // get initial active
-    const active = menu.find('.active')
+  // get initial active
+  const active = menu.find('.active')
 
-    if (active.length > 0) {
-      // remove initial active
-      active.removeClass('active')
+  if(active.length > 0) {
+    // remove initial active
+    active.removeClass('active')
 
-      // jump without animation
-      this.jump(active, false)
-    }
-
-    // set initial height on the menu
-    // to fix the first transition resize bug
-    setTimeout(() => menu.height(menu.outerHeight()), settings.speed)
+    // jump without animation
+    this.jump(active, false)
   }
 
-  // slide the menu
-  _move(depth = 0, callback = () => {}) {
-    // don't bother packing if we're not going anywhere
-    if (depth === 0) {
-      return
-    }
+  // set initial height on the menu
+  // to fix the first transition resize bug
+  setTimeout(() => menu.height(menu.outerHeight()), settings.speed)
+}
+
+// slide the menu
+_move(depth = 0, callback = () => {}) {
+  // don't bother packing if we're not going anywhere
+  if(depth === 0) {
+    return
+  }
 
     const { settings, base } = this
 
-    // get current position from the left
-    const left = Math.round(parseInt(base.get(0).style.left)) || 0
+  // get current position from the left
+  const left = Math.round(parseInt(base.get(0).style.left)) || 0
 
-    // set the new position from the left
-    base.css('left', `${left - depth * 100}%`)
+  // set the new position from the left
+  base.css('left', `${left - depth * 100}%`)
 
-    // callback after the animation
-    if (typeof callback === 'function') {
-      setTimeout(callback, settings.speed)
-    }
+  // callback after the animation
+  if(typeof callback === 'function') {
+    setTimeout(callback, settings.speed)
   }
+}
 
-  // resize the menu
-  // to match content height
-  _resize(content) {
+// resize the menu
+// to match content height
+_resize(content) {
     const { menu } = this
 
-    menu.height(content.outerHeight())
-  }
+  menu.height(content.outerHeight())
+  menu.trigger('slinky-resize', {height:content.outerHeight()});
+}
 
-  // set the transition speed
-  _transition(speed = 300) {
+// set the transition speed
+_transition(speed = 300) {
     const { menu, base } = this
 
-    menu.css('transition-duration', `${speed}ms`)
-    base.css('transition-duration', `${speed}ms`)
-  }
+  menu.css('transition-duration', `${speed}ms`)
+  base.css('transition-duration', `${speed}ms`)
+}
 
-  // jump to an element
-  jump(target, animate = true) {
-    if (!target) {
-      return
-    }
+// jump to an element
+jump(target, animate = true) {
+  if(!target) {
+    return
+  }
 
     const { menu, settings } = this
 
-    const to = jQuery(target)
+  const to = jQuery(target)
 
-    // get all current active
-    const active = menu.find('.active')
+  // get all current active
+  const active = menu.find('.active')
 
-    // how many moves must we jump?
-    let count = 0
+  // how many moves must we jump?
+  let count = 0
 
-    // this many
-    // until we reach the parent list
-    if (active.length > 0) {
-      count = active.parentsUntil(menu, 'ul').length
-    }
-
-    // remove current active
-    // hide all lists
-    menu
-      .find('ul')
-      .removeClass('active')
-      .hide()
-
-    // get parent list
-    const menus = to.parentsUntil(menu, 'ul')
-
-    // show parent list
-    menus.show()
-
-    //
-    to.show().addClass('active')
-
-    // set transition speed to 0 if no animation
-    if (!animate) {
-      this._transition(0)
-    }
-
-    // make the checkers move
-    this._move(menus.length - count)
-
-    // resize menu if need be
-    if (settings.resize) {
-      this._resize(to)
-    }
-
-    // set transition speed to default after transition
-    if (!animate) {
-      this._transition(settings.speed)
-    }
+  // this many
+  // until we reach the parent list
+  if(active.length > 0) {
+    count = active.parentsUntil(menu, 'ul').length
   }
 
-  // go big or go home
-  // just go home
-  home(animate = true) {
+  // remove current active
+  // hide all lists
+  menu
+    .find('ul')
+    .removeClass('active')
+    .hide()
+
+  // get parent list
+  const menus = to.parentsUntil(menu, 'ul')
+
+  // show parent list
+  menus.show()
+
+  //
+  to.show().addClass('active')
+
+  // set transition speed to 0 if no animation
+  if(!animate) {
+    this._transition(0)
+  }
+
+  // make the checkers move
+  this._move(menus.length - count)
+
+  // resize menu if need be
+  if(settings.resize) {
+    this._resize(to)
+  }
+
+  // set transition speed to default after transition
+  if(!animate) {
+    this._transition(settings.speed)
+  }
+}
+
+// go big or go home
+// just go home
+home(animate = true) {
     const { base, menu, settings } = this
 
-    // set transition speed to 0 if no animation
-    if (!animate) {
-      this._transition(0)
-    }
-
-    // get current active
-    const active = menu.find('.active')
-
-    // get all parent lists
-    const parents = active.parentsUntil(menu, 'ul')
-
-    // make the move
-    this._move(-parents.length, () => {
-      // remove the current active
-      active.removeClass('active').hide()
-
-      // hide all parents except base
-      parents.not(base).hide()
-    })
-
-    // resize if need be
-    if (settings.resize) {
-      this._resize(base)
-    }
-
-    // set transition speed back to default
-    if (animate === false) {
-      this._transition(settings.speed)
-    }
+  // set transition speed to 0 if no animation
+  if(!animate) {
+    this._transition(0)
   }
 
-  // crush, kill, destroy
-  destroy() {
+  // get current active
+  const active = menu.find('.active')
+
+  // get all parent lists
+  const parents = active.parentsUntil(menu, 'ul')
+
+  // make the move
+  this._move(-parents.length, () => {
+    // remove the current active
+    active.removeClass('active').hide()
+
+    // hide all parents except base
+    parents.not(base).hide()
+  })
+
+  // resize if need be
+  if(settings.resize) {
+    this._resize(base)
+  }
+
+  // set transition speed back to default
+  if(animate === false) {
+    this._transition(settings.speed)
+  }
+}
+
+// crush, kill, destroy
+destroy() {
     const { base, menu } = this
 
-    // remove all headers
-    jQuery('.header', menu).remove()
+  // remove all headers
+  jQuery('.header', menu).remove()
 
-    // remove Slinky links
-    // and click listeners
-    jQuery('a', menu)
-      .removeClass('next')
-      .off('click')
+  // remove Slinky links
+  // and click listeners
+  jQuery('a', menu)
+    .removeClass('next')
+    .off('click')
 
-    // remove inline styles
-    menu.css({
-      height: '',
-      'transition-duration': ''
-    })
+  // remove inline styles
+  menu.css({
+    height: '',
+    'transition-duration': ''
+  })
 
-    base.css({
-      left: '',
-      'transition-duration': ''
-    })
+  base.css({
+    left: '',
+    'transition-duration': ''
+  })
 
-    // remove Slinky HTML
-    jQuery('li > a > span', menu)
-      .contents()
-      .unwrap()
+  // remove Slinky HTML
+  jQuery('li > a > span', menu)
+    .contents()
+    .unwrap()
 
-    // remove any current active
-    menu.find('.active').removeClass('active')
+  // remove any current active
+  menu.find('.active').removeClass('active')
 
-    // remove any Slinky style classes
-    const styles = menu.attr('class').split(' ')
+  // remove any Slinky style classes
+  const styles = menu.attr('class').split(' ')
 
-    styles.forEach(style => {
-      if (style.indexOf('slinky') === 0) {
-        menu.removeClass(style)
-      }
-    })
+  styles.forEach(style => {
+    if(style.indexOf('slinky') === 0) {
+      menu.removeClass(style)
+    }
+  })
 
-    // reset fields
-    const fields = ['settings', 'menu', 'base']
+  // reset fields
+  const fields = ['settings', 'menu', 'base']
 
-    fields.forEach(field => delete this[field])
-  }
+  fields.forEach(field => delete this[field])
+}
 }
 
 // jQuery plugin
